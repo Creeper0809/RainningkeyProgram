@@ -1,0 +1,15 @@
+﻿<Window x:Class="RainningkeyProgram.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ResizeMode="NoResize"
+        Height="550" Width="700"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Grid>
+        <Canvas x:Name="OverlayCanvas" Background="Transparent"/>
+    </Grid>
+</Window>

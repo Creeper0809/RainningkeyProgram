@@ -1,0 +1,85 @@
+﻿<Window x:Class="RainningkeyProgram.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Key Settings" Height="550" Width="700"
+        Loaded="MainWindow_Loaded"
+        Background="White"
+        ResizeMode="NoResize">
+    <Grid Margin="10">
+        <TabControl SelectionChanged="TabControl_SelectionChanged">
+            <!-- 첫 번째 탭: 레이아웃 -->
+            <TabItem Header="레이아웃">
+                <Grid Margin="10" FocusManager.FocusedElement="{x:Null}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 상단: Cell Size 설정 -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="10" Grid.Row="0">
+                        <TextBlock Text="Cell Size:" VerticalAlignment="Center" Margin="0 0 5 0"/>
+                        <TextBox x:Name="GlobalCellSizeBox" Width="60" Text="40"/>
+                    </StackPanel>
+
+                    <!-- 하단: LayoutCanvas와 적용 버튼 오버레이 -->
+                    <Grid Grid.Row="1">
+                        <!-- LayoutCanvas는 실제 블럭들을 배치할 영역 -->
+                        <Canvas x:Name="LayoutCanvas" Background="White" SizeChanged="LayoutCanvas_SizeChanged">
+                            <Line x:Name="DividerLine" Stroke="Gray" StrokeThickness="1" />
+                        </Canvas>
+                        <!-- 우하단에 고정된 적용 버튼 -->
+                        <Button Content="적용" Width="100" Height="30" 
+                                HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                                Margin="10" Click="ApplyOverlayMode_Click"/>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- 두 번째 탭: 키 설정 -->
+            <TabItem Header="키 설정">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2.5*"/>
+                        <ColumnDefinition Width="1.5*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <GroupBox Header="Currently added keys" Grid.Column="0" Margin="5">
+                        <ListView x:Name="KeyListView">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="Key" Width="200" DisplayMemberBinding="{Binding Key}" />
+                                    <GridViewColumn Header="Delete" Width="80">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Content="Delete" Foreground="Black" Click="DeleteButton_Click"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </GroupBox>
+
+                    <StackPanel Grid.Column="1" Margin="5">
+                        <GroupBox Header="Current Key" Margin="0 0 0 10">
+                            <TextBlock x:Name="CurrentKeyText"
+                                       Text="&lt;None&gt;"
+                                       FontSize="16"
+                                       HorizontalAlignment="Center"
+                                       Margin="0 10"
+                                       Foreground="Black"/>
+                        </GroupBox>
+
+                        <Button x:Name="AddKeyButton"
+                                Content="Add key"
+                                Click="AddKeyButton_Click"
+                                Margin="30 10 30 10"
+                                Padding="5"
+                                Foreground="Black"
+                                IsEnabled="False"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
