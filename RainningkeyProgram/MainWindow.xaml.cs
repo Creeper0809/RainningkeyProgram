@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -15,26 +16,10 @@ namespace RainningkeyProgram
     public partial class MainWindow : Window
     {
         // KeyItem 클래스 (추가 옵션 포함)
-        public class KeyItem
-        {
-            public double x { get; set; } = 0;
-            public double y { get; set; } = 0;
-            public string Key { get; set; } = string.Empty;
-            public int Width { get; set; } = 1;
-            public int Height { get; set; } = 1;
-            public Color BlockColor { get; set; } = Colors.LightGray;
-            public bool RainEffect { get; set; } = true;
-            public Color RainColor { get; set; } = Colors.DeepSkyBlue;
-            // 새 옵션: 레인 효과 표시 순서 (true: 앞, false: 뒤)
-            public bool ShowRainEffectInFront { get; set; } = true;
-        }
 
         private ObservableCollection<KeyItem> keyItems = new();
         private string? lastPressedKey = null;
-        private RawInputProcessor rawInputProcessor = new();
-
-        // 각 키에 대해 활성화된 바 효과 정보를 저장합니다.
-        private readonly System.Collections.Generic.Dictionary<string, BarEffectInfo> activeBarEffects = new();
+        private RawInputProcessor rawInputProcessor = RawInputProcessor.GetInstance();
 
         private class BarEffectInfo
         {
@@ -47,10 +32,6 @@ namespace RainningkeyProgram
         private Point dragOffset;
         private bool isDragging = false;
         private Border? draggedBlock = null;
-        private const int SnapSize = 20;
-
-        // 바 효과 속도: 픽셀/초 (키를 뗐을 때 2초 동안 이 속도로 위로 이동)
-        private double _barUpwardSpeed = 100; // 기본값 100 픽셀/초
 
         public MainWindow()
         {
@@ -100,6 +81,7 @@ namespace RainningkeyProgram
             {
                 if (block.Tag is KeyItem item)
                 {
+                    item.sellSize = newCellSize;
                     block.Width = item.Width * newCellSize;
                     block.Height = item.Height * newCellSize;
                 }
@@ -121,7 +103,7 @@ namespace RainningkeyProgram
             {
                 double midY = LayoutCanvas.ActualHeight / 2;
                 // 스냅 적용 (예: SnapSize 단위로 반올림)
-                midY = Math.Round(midY / SnapSize) * SnapSize;
+                midY = Math.Round(midY / Constants.SnapSize) * Constants.SnapSize;
                 DividerLine.X1 = 0;
                 DividerLine.Y1 = midY;
                 DividerLine.X2 = LayoutCanvas.ActualWidth;
@@ -250,11 +232,7 @@ namespace RainningkeyProgram
 
                     if (block != null)
                     {
-                        // 이미 바 효과가 실행 중이면 무시
-                        if (!activeBarEffects.ContainsKey(keyName))
-                        {
-                            CreateAndStartBarEffect(block, matchedItem);
-                        }
+                        BarEffector.CreateAndStartBarEffect(LayoutCanvas, block, matchedItem);
                     }
                 }
             });
@@ -265,109 +243,8 @@ namespace RainningkeyProgram
         {
             Dispatcher.Invoke(() =>
             {
-                if (activeBarEffects.TryGetValue(keyName, out var effect))
-                {
-                    effect.Timer.Stop();
-                    AnimateBarAfterKeyRelease(effect.Bar);
-                    activeBarEffects.Remove(keyName);
-                }
+                BarEffector.AnimateBarAfterKeyRelease(LayoutCanvas, keyName);
             });
-        }
-
-        // 바 효과 생성: Bar는 블럭의 x 좌표와 동일하게, y는 DividerLine(스냅 적용된 값)에서 시작하도록 생성
-        private void CreateAndStartBarEffect(Border block, KeyItem item)
-        {
-            if (!int.TryParse(GlobalCellSizeBox.Text, out int cellSize))
-                cellSize = 40;
-            double outlineThickness = 2; // 필요에 따라 조정
-            double initialBarHeight = 10;
-
-            // X 좌표: 블럭의 왼쪽 좌표
-            double left = Canvas.GetLeft(block);
-            // y 좌표는 DividerLine의 위치 (스냅 적용)
-            double dividerY = LayoutCanvas.ActualHeight / 2;
-            dividerY = Math.Round(dividerY / SnapSize) * SnapSize;
-            double top = dividerY;
-
-            // Bar의 너비는 블럭과 동일하게 (원하는 경우 outlineThickness 적용 가능)
-            var bar = new Rectangle
-            {
-                Width = block.Width,
-                Height = initialBarHeight,
-                Fill = new SolidColorBrush(item.RainColor),
-                Opacity = 0.8
-            };
-
-            Canvas.SetLeft(bar, left);
-            Canvas.SetTop(bar, top);
-
-            // 레인 효과 우선순위에 따라 z-index 설정
-            if (item.ShowRainEffectInFront)
-                Panel.SetZIndex(bar, 1000);
-            else
-                Panel.SetZIndex(bar, -1);
-
-            LayoutCanvas.Children.Add(bar);
-
-            // DispatcherTimer 간격 16ms (약 60fps)로 부드럽게 업데이트
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            DateTime startTime = DateTime.Now;
-
-            timer.Tick += (s, e) =>
-            {
-                double elapsed = (DateTime.Now - startTime).TotalSeconds;
-                // 초당 _barUpwardSpeed 픽셀씩 증가
-                double growth = elapsed * _barUpwardSpeed;
-                double newHeight = initialBarHeight + growth;
-                bar.Height = newHeight;
-                // Bar는 DividerLine에서 위로 이동: 새로운 top = dividerY - growth
-                Canvas.SetTop(bar, top - growth);
-            };
-
-            timer.Start();
-
-            activeBarEffects[item.Key] = new BarEffectInfo
-            {
-                Bar = bar,
-                StartTime = startTime,
-                Timer = timer
-            };
-        }
-
-        // 키가 떼어진 후, 2초 동안 _barUpwardSpeed에 따라 위로 이동 후 0.5초 페이드아웃 (DoubleAnimation 사용)
-        private void AnimateBarAfterKeyRelease(Rectangle bar)
-        {
-            double currentTop = Canvas.GetTop(bar);
-            double animationDuration = 2.0; // 2초 동안 이동
-            double displacement = _barUpwardSpeed * animationDuration; // 2초 동안 이동할 거리
-            double newTop = currentTop - displacement;
-
-            var upwardAnimation = new DoubleAnimation
-            {
-                From = currentTop,
-                To = newTop,
-                Duration = TimeSpan.FromSeconds(animationDuration),
-                FillBehavior = FillBehavior.Stop
-            };
-
-            upwardAnimation.Completed += (s, e) =>
-            {
-                Canvas.SetTop(bar, newTop);
-                var fadeOutAnimation = new DoubleAnimation
-                {
-                    From = bar.Opacity,
-                    To = 0,
-                    Duration = TimeSpan.FromSeconds(0.5),
-                    FillBehavior = FillBehavior.Stop
-                };
-                fadeOutAnimation.Completed += (s2, e2) =>
-                {
-                    LayoutCanvas.Children.Remove(bar);
-                };
-                bar.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
-            };
-
-            bar.BeginAnimation(Canvas.TopProperty, upwardAnimation);
         }
 
         // 드래그 시작: 블럭은 하단 영역(DividerLine 아래)에서만 드래그 가능
@@ -398,8 +275,8 @@ namespace RainningkeyProgram
 
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
                 {
-                    newX = Math.Round(newX / SnapSize) * SnapSize;
-                    newY = Math.Round(newY / SnapSize) * SnapSize;
+                    newX = Math.Round(newX / Constants.SnapSize) * Constants.SnapSize;
+                    newY = Math.Round(newY / Constants.SnapSize) * Constants.SnapSize;
                 }
 
                 Canvas.SetLeft(draggedBlock, newX);

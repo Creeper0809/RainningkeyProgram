@@ -28,7 +28,6 @@ namespace RainningkeyProgram
                 // KeyItem의 X, Y 값을 이용해 보더의 위치 설정
                 Canvas.SetLeft(block, setting.x);
                 Canvas.SetTop(block, setting.y);
-                MessageBox.Show(setting.x.ToString() + " " + setting.y.ToString());
                 OverlayCanvas.Children.Add(block);
             }
         }
@@ -37,8 +36,8 @@ namespace RainningkeyProgram
         {
             var block = new Border
             {
-                Width = setting.Width * 40,   // 셀 사이즈 40 기준
-                Height = setting.Height * 40,
+                Width = setting.Width * setting.sellSize,   // 셀 사이즈 40 기준
+                Height = setting.Height * setting.sellSize,
                 Background = new System.Windows.Media.SolidColorBrush(setting.BlockColor),
                 BorderBrush = new System.Windows.Media.SolidColorBrush(setting.RainEffect ? setting.RainColor : System.Windows.Media.Colors.Gray),
                 BorderThickness = new Thickness(2),

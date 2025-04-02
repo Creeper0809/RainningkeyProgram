@@ -8,6 +8,8 @@ namespace RainningkeyProgram
 {
     public class RawInputProcessor
     {
+        private RawInputProcessor() { }
+        private static RawInputProcessor Instance;
         public event Action<string>? KeyDown;
         public event Action<string>? KeyUp;
 
@@ -55,7 +57,12 @@ namespace RainningkeyProgram
             public RAWINPUTHEADER header;
             public RAWKEYBOARD keyboard;
         }
-
+        public static RawInputProcessor GetInstance()
+        {
+            if (Instance == null)
+                Instance = new RawInputProcessor();
+            return Instance;
+        }
         public void RegisterRawInputDevices(IntPtr hwnd)
         {
             RAWINPUTDEVICE[] rid = new RAWINPUTDEVICE[1];
