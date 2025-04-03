@@ -1,48 +1,41 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
-using System.Windows.Threading;
+using System.Windows.Controls;
 
 namespace RainningkeyProgram
 {
     public class BarEffector
     {
+        // 각 키의 바 효과 정보를 저장하는 클래스
         public class BarEffectInfo
         {
             public Rectangle Bar { get; set; } = null!;
             public DateTime StartTime { get; set; }
-            public DispatcherTimer Timer { get; set; } = null!;
+            public EventHandler RenderingHandler { get; set; } = null!;
         }
-        // 각 키에 대해 활성화된 바 효과 정보를 저장합니다.
-        private static readonly System.Collections.Generic.Dictionary<string, BarEffectInfo> activeBarEffects = new();
-        // 바 효과 생성: Bar는 블럭의 x 좌표와 동일하게, y는 DividerLine(스냅 적용된 값)에서 시작하도록 생성
-        public static void CreateAndStartBarEffect(Canvas canvas, Border block, KeyItem item)
+
+        // 활성화된 바 효과를 저장하는 딕셔너리 (키: item.Key + canvas.Name)
+        private static readonly Dictionary<string, BarEffectInfo> activeBarEffects = new();
+
+        // 키 누르는 동안 사각형(바)을 실시간으로 업데이트하는 메서드
+        public static void CreateAndStartBarEffect(Canvas canvas, Border block, KeyItem item, double top)
         {
-            if(activeBarEffects.ContainsKey(item.Key + canvas.Name)) return;
-            double outlineThickness = 2; // 필요에 따라 조정
+            if (activeBarEffects.ContainsKey(item.Key + canvas.Name))
+                return;
+
             double initialBarHeight = 10;
-
-            // X 좌표: 블럭의 왼쪽 좌표
             double left = Canvas.GetLeft(block);
-            // y 좌표는 DividerLine의 위치 (스냅 적용)
-            double dividerY = canvas.ActualHeight / 2;
-            dividerY = Math.Round(dividerY / Constants.SnapSize) * Constants.SnapSize;
-            double top = dividerY;
 
-            // Bar의 너비는 블럭과 동일하게 (원하는 경우 outlineThickness 적용 가능)
             var bar = new Rectangle
             {
                 Width = block.Width,
                 Height = initialBarHeight,
                 Fill = new SolidColorBrush(item.RainColor),
-                Opacity = 0.8
+                Opacity = 1
             };
 
             Canvas.SetLeft(bar, left);
@@ -55,55 +48,56 @@ namespace RainningkeyProgram
                 Panel.SetZIndex(bar, -1);
 
             canvas.Children.Add(bar);
-
-            // DispatcherTimer 간격 16ms (약 60fps)로 부드럽게 업데이트
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             DateTime startTime = DateTime.Now;
 
-            timer.Tick += (s, e) =>
+            // Rendering 이벤트를 사용하여 매 프레임마다 바의 높이와 위치를 업데이트합니다.
+            EventHandler renderingHandler = (s, e) =>
             {
                 double elapsed = (DateTime.Now - startTime).TotalSeconds;
-                // 초당 _barUpwardSpeed 픽셀씩 증가
-                double growth = elapsed * Constants._barUpwardSpeed;
-                double newHeight = initialBarHeight + growth;
+                // 키가 눌린 시간에 비례해 높이가 증가
+                double newHeight = initialBarHeight + elapsed * Constants._barUpwardSpeed;
                 bar.Height = newHeight;
-                // Bar는 DividerLine에서 위로 이동: 새로운 top = dividerY - growth
-                Canvas.SetTop(bar, top - growth);
+                // 바는 동일한 속도로 위로 이동
+                double newTop = top - elapsed * Constants._barUpwardSpeed;
+                Canvas.SetTop(bar, newTop);
             };
-
-            timer.Start();
+            CompositionTarget.Rendering += renderingHandler;
 
             activeBarEffects[item.Key + canvas.Name] = new BarEffectInfo
             {
                 Bar = bar,
                 StartTime = startTime,
-                Timer = timer
+                RenderingHandler = renderingHandler
             };
         }
-        // 키가 떼어진 후, 2초 동안 _barUpwardSpeed에 따라 위로 이동 후 0.5초 페이드아웃 (DoubleAnimation 사용)
-        public static void AnimateBarAfterKeyRelease(Canvas canvas,String keyName)
-        {
 
+        // 키 릴리즈 시 호출되어 Rendering 업데이트를 중단하고 추가 애니메이션을 실행하는 메서드
+        public static void AnimateBarAfterKeyRelease(Canvas canvas, string keyName)
+        {
             if (activeBarEffects.TryGetValue(keyName + canvas.Name, out var effect))
             {
-                effect.Timer.Stop();
                 var bar = effect.Bar;
+                // Rendering 이벤트 핸들러 제거하여 업데이트 중단
+                CompositionTarget.Rendering -= effect.RenderingHandler;
+
                 double currentTop = Canvas.GetTop(bar);
-                double animationDuration = 1f; // 2초 동안 이동
-                double displacement = Constants._barUpwardSpeed * animationDuration; // 2초 동안 이동할 거리
+                double animationDurationSeconds = 1.0; // 1초 동안 추가 이동
+                double displacement = Constants._barUpwardSpeed * animationDurationSeconds;
                 double newTop = currentTop - displacement;
 
+                // 동일한 속도로 위로 이동하는 애니메이션
                 var upwardAnimation = new DoubleAnimation
                 {
                     From = currentTop,
                     To = newTop,
-                    Duration = TimeSpan.FromSeconds(animationDuration),
+                    Duration = TimeSpan.FromSeconds(animationDurationSeconds),
                     FillBehavior = FillBehavior.Stop
                 };
 
                 upwardAnimation.Completed += (s, e) =>
                 {
                     Canvas.SetTop(bar, newTop);
+                    // 페이드 아웃 애니메이션 실행
                     var fadeOutAnimation = new DoubleAnimation
                     {
                         From = bar.Opacity,
@@ -121,7 +115,6 @@ namespace RainningkeyProgram
                 bar.BeginAnimation(Canvas.TopProperty, upwardAnimation);
                 activeBarEffects.Remove(keyName + canvas.Name);
             }
-            
         }
     }
 }

@@ -15,9 +15,6 @@ namespace RainningkeyProgram
 {
     public partial class MainWindow : Window
     {
-        // KeyItem 클래스 (추가 옵션 포함)
-
-        private ObservableCollection<KeyItem> keyItems = new();
         private string? lastPressedKey = null;
         private RawInputProcessor rawInputProcessor = RawInputProcessor.GetInstance();
 
@@ -36,11 +33,10 @@ namespace RainningkeyProgram
         public MainWindow()
         {
             InitializeComponent();
-            KeyListView.ItemsSource = keyItems;
+            KeyListView.ItemsSource = Constants.keyItems;
 
             GlobalCellSizeBox.TextChanged += GlobalCellSizeBox_TextChanged;
             GlobalCellSizeBox.KeyDown += GlobalCellSizeBox_KeyDown;
-            this.Loaded += MainWindow_Loaded;
         }
         private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -63,12 +59,19 @@ namespace RainningkeyProgram
             rawInputProcessor.RegisterRawInputDevices(hwndSource.Handle);
             // 키 다운과 키 업 이벤트 구독
             rawInputProcessor.KeyDown += OnRawKeyDown;
-            rawInputProcessor.KeyUp += OnRawKeyUp;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             Keyboard.ClearFocus();
+            foreach (var setting in Constants.keyItems)
+            {
+                Border block = CreateBlock(setting);
+                // KeyItem의 X, Y 값을 이용해 보더의 위치 설정
+                Canvas.SetLeft(block, setting.x);
+                Canvas.SetTop(block, setting.y);
+                LayoutCanvas.Children.Add(block);
+            }
             CurrentKeyText.Text = "<None>";
         }
 
@@ -110,39 +113,12 @@ namespace RainningkeyProgram
                 DividerLine.Y2 = midY;
             }
         }
-        private List<KeyItem> GetLayoutSettings()
-        {
-            // LayoutCanvas에 있는 각 블럭의 설정(KeyItem)을 수집합니다.
-            var settings = new List<KeyItem>();
-            foreach (UIElement child in LayoutCanvas.Children)
-            {
-                if (child is Border border && border.Tag is KeyItem keyItem)
-                {
-                    // 기존 KeyItem을 그대로 사용하거나 복사본을 생성할 수 있습니다.
-                    settings.Add(new KeyItem
-                    {
-                        Key = keyItem.Key,
-                        Width = keyItem.Width,
-                        Height = keyItem.Height,
-                        BlockColor = keyItem.BlockColor,
-                        RainEffect = keyItem.RainEffect,
-                        RainColor = keyItem.RainColor,
-                        ShowRainEffectInFront = keyItem.ShowRainEffectInFront
-                    });
-                }
-            }
-            return settings;
-        }
 
         private void ApplyOverlayMode_Click(object sender, RoutedEventArgs e)
         {
-            // 현재 레이아웃 설정을 가져옵니다.
-            var layoutSettings = GetLayoutSettings();
-            // 새 오버레이 창을 생성하면서 설정을 전달합니다.
-            var overlay = new OverlayWindow(keyItems);
+            var overlay = new OverlayWindow();
             overlay.Show();
 
-            // 메인 창을 닫습니다.
             this.Close();
         }
 
@@ -152,16 +128,18 @@ namespace RainningkeyProgram
             if (string.IsNullOrEmpty(lastPressedKey)) return;
             if (!int.TryParse(GlobalCellSizeBox.Text, out int cellSize)) cellSize = 40;
 
-            if (keyItems.All(item => item.Key != lastPressedKey))
+            if (Constants.keyItems.All(item => item.Key != lastPressedKey))
             {
                 var item = new KeyItem { Key = lastPressedKey };
-                keyItems.Add(item);
+                Constants.keyItems.Add(item);
                 CurrentKeyText.Text = $"<추가됨: {lastPressedKey}>";
 
-                var block = CreateBlock(item, cellSize);
+                var block = CreateBlock(item);
                 LayoutCanvas.Children.Add(block);
 
                 double lowerMargin = 10;
+                item.x = 10;
+                item.y = LayoutCanvas.ActualHeight - block.Height - lowerMargin;
                 Canvas.SetLeft(block, 10);
                 Canvas.SetTop(block, LayoutCanvas.ActualHeight - block.Height - lowerMargin);
             }
@@ -176,12 +154,12 @@ namespace RainningkeyProgram
 
 
         // 블럭 생성: UI에 나타날 블럭(키 아이템) 생성
-        private Border CreateBlock(KeyItem item, int cellSize)
+        private Border CreateBlock(KeyItem item)
         {
             var block = new Border
             {
-                Width = item.Width * cellSize,
-                Height = item.Height * cellSize,
+                Width = item.Width * 40,
+                Height = item.Height * 40,
                 Background = new SolidColorBrush(item.BlockColor),
                 BorderBrush = new SolidColorBrush(item.RainEffect ? item.RainColor : Colors.Gray),
                 BorderThickness = new Thickness(2),
@@ -219,34 +197,8 @@ namespace RainningkeyProgram
                 lastPressedKey = keyName;
                 CurrentKeyText.Text = $"<현재 입력: {lastPressedKey}>";
                 AddKeyButton.IsEnabled = true;
-
-                var matchedItem = keyItems.FirstOrDefault(item => item.Key == keyName);
-                if (matchedItem != null)
-                {
-                    // 레인 효과가 활성화되어 있을 때만 효과를 생성
-                    if (!matchedItem.RainEffect)
-                        return;
-
-                    var block = LayoutCanvas.Children.OfType<Border>()
-                        .FirstOrDefault(b => (b.Tag as KeyItem)?.Key == matchedItem.Key);
-
-                    if (block != null)
-                    {
-                        BarEffector.CreateAndStartBarEffect(LayoutCanvas, block, matchedItem);
-                    }
-                }
             });
         }
-
-        // 키 업 이벤트: 해당 키의 바 효과를 종료하는 대신, 2초 동안 _barUpwardSpeed에 따라 위로 이동 후 페이드아웃합니다.
-        private void OnRawKeyUp(string keyName)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                BarEffector.AnimateBarAfterKeyRelease(LayoutCanvas, keyName);
-            });
-        }
-
         // 드래그 시작: 블럭은 하단 영역(DividerLine 아래)에서만 드래그 가능
         private void Block_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
@@ -337,7 +289,7 @@ namespace RainningkeyProgram
         {
             if (sender is Button btn && btn.DataContext is KeyItem item)
             {
-                keyItems.Remove(item);
+                Constants.keyItems.Remove(item);
                 var block = LayoutCanvas.Children.OfType<Border>()
                     .FirstOrDefault(b => (b.Tag as KeyItem)?.Key == item.Key);
                 if (block != null) LayoutCanvas.Children.Remove(block);

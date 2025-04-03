@@ -9,6 +9,11 @@
         ResizeMode="NoResize"
         Height="550" Width="700"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="오버레이 종료" Click="MenuItem_CloseOverlay_Click"/>
+        </ContextMenu>
+    </Window.ContextMenu>
     <Grid>
         <Canvas x:Name="OverlayCanvas" Background="Transparent"/>
     </Grid>
