@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,21 +11,22 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Microsoft.TeamFoundation.Common.Internal;
 
 namespace RainningkeyProgram
 {
+    static class NativeMethods
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool AllocConsole();
+    }
+
     public partial class MainWindow : Window
     {
         private string? lastPressedKey = null;
         private RawInputProcessor rawInputProcessor = RawInputProcessor.GetInstance();
-
-        private class BarEffectInfo
-        {
-            public Rectangle Bar { get; set; } = null!;
-            public DateTime StartTime { get; set; }
-            public DispatcherTimer Timer { get; set; } = null!;
-        }
-
+        private bool isOptionsPanelOpen = false;
         // 드래그 관련 변수
         private Point dragOffset;
         private bool isDragging = false;
@@ -37,6 +39,8 @@ namespace RainningkeyProgram
 
             GlobalCellSizeBox.TextChanged += GlobalCellSizeBox_TextChanged;
             GlobalCellSizeBox.KeyDown += GlobalCellSizeBox_KeyDown;
+
+            NativeMethods.AllocConsole();
         }
         private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -50,6 +54,33 @@ namespace RainningkeyProgram
                 }), DispatcherPriority.ApplicationIdle);
             }
         }
+
+        private bool isRightOptionsOpen = false;
+
+        private void ToggleRightOptionsPanel_Click(object sender, RoutedEventArgs e)
+        {
+            if (isRightOptionsOpen)
+            {
+                var closeAnim = new DoubleAnimation(0, 250, TimeSpan.FromMilliseconds(300));
+                RightOptionsTransform.BeginAnimation(TranslateTransform.XProperty, closeAnim);
+                closeAnim.Completed += (s, _) =>
+                {
+                    RightOptionsContainer.Visibility = Visibility.Collapsed;
+                };
+            }
+            else
+            {
+                RightOptionsContainer.Visibility = Visibility.Visible;
+                var openAnim = new DoubleAnimation(250, 0, TimeSpan.FromMilliseconds(300));
+                RightOptionsTransform.BeginAnimation(TranslateTransform.XProperty, openAnim);
+            }
+
+            isRightOptionsOpen = !isRightOptionsOpen;
+        }
+
+
+
+
         // HwndSource 후크 등록 및 Raw Input 등록
         protected override void OnSourceInitialized(EventArgs e)
         {
@@ -116,6 +147,11 @@ namespace RainningkeyProgram
 
         private void ApplyOverlayMode_Click(object sender, RoutedEventArgs e)
         {
+            if(Constants.keyItems.Count == 0)
+            {
+                MessageBox.Show("키 아이템이 없습니다. 먼저 키 아이템을 추가하세요.");
+                return;
+            }
             var overlay = new OverlayWindow();
             overlay.Show();
 
